@@ -1,1 +1,327 @@
+#include <Wire.h>
+#include <LCDi2cR.h>
+#include <XBee.h>
+#include <math.h>
+#define TMP102 0x48
+#define MAGIC_NUMBER 10061029
 
+//Joystick
+int joystickX;
+int joystickY;
+int joystickButton;
+int joystickHorizontal = 0;
+int joystickVertical = 1;
+int stateX = 1;
+int stateY = 1;
+
+
+//LCD
+LCDi2cR lcd = LCDi2cR(4, 20, 0x63, 0);
+uint8_t rows = 4;
+uint8_t cols = 20;
+
+//Xbee send
+XBee xbee               = XBee();
+uint8_t payload[4] = {0};
+int Xbee = 0;
+// SH + SL Address of receiving XBee                             // Remote XBee    
+ XBeeAddress64 addr64 = XBeeAddress64(0x0013A200, 0x4098DA06); // address of the receiver XBee
+   
+ZBTxRequest zbTx = ZBTxRequest(addr64, payload, sizeof(payload));
+ZBTxStatusResponse txStatus = ZBTxStatusResponse();
+
+//Xbee receive
+XBeeResponse response   = XBeeResponse();
+ZBRxResponse        rx  = ZBRxResponse();
+ModemStatusResponse msr = ModemStatusResponse();
+
+//variables for xbee received
+int temperatureGet;
+float temperature;
+long pressure;
+int altitudeGet;
+float altitude;
+int magneticX;
+int magneticY;
+int magneticZ;
+int magnetic;
+int compassAz;
+int compassAlt;
+int humidityGet;
+int humidity;
+
+void setup() {
+  Wire.begin();
+  Serial.begin(9600);
+
+//xbee
+  Serial2.begin(9600);
+  xbee.setSerial(Serial2);
+
+  //lcd
+  lcd.init(); 
+  lcd.clear();
+  lcd.print("Hi");
+ 
+
+}
+
+void loop() {
+joystickX = analogRead(joystickHorizontal);
+joystickY = analogRead(joystickVertical);
+if (joystickX >= 600){
+  stateX = 2;
+}
+else{
+  if(joystickX <= 500){
+    stateX = 0 ;
+  }
+  else{
+    stateX =1;
+  }
+}
+if (joystickY >= 600){
+  stateY = 2 ;
+}
+else{
+  if(joystickY <= 500){
+    stateY = 0;
+  }
+  else{
+    stateY = 1;
+  }
+}
+
+
+
+
+
+Serial.println(stateX);
+Serial.println(stateY);
+Serial.println(joystickX);
+Serial.println(joystickY);
+Serial.println("yeet");
+
+  //Xbee send
+   Xbee = stateY;
+   payload[0] = Xbee >> 8 & 0xff;
+   payload[1] = Xbee & 0xff;
+   Xbee = stateX;
+   payload[2] = Xbee >> 8 & 0xff;
+   payload[3] = Xbee & 0xff;
+
+   xbee.send(zbTx);
+
+
+  
+xbeerecievedata();
+  //sendxbee();
+  //receivexbee();
+}
+
+/*void sendxbee() {
+
+//xbee transmit
+  //Temp102
+      getTemp102();
+
+}*/
+
+/*void receivexbee() {
+//xbee receive
+  xbee.readPacket();
+
+   if (xbee.getResponse().isAvailable())
+    {
+      // got something
+      Serial.print(rx.getDataLength(),DEC);
+      if (xbee.getResponse().getApiId() == ZB_RX_RESPONSE) 
+      {
+        // got a zb rx packet
+        // now fill our zb rx class
+        xbee.getResponse().getZBRxResponse(rx);
+        //if (rx.getOption() == ZB_PACKET_ACKNOWLEDGED)
+
+     //Check MAGIC_NUMBER to determine if data is live or saved
+
+    int magic = rx.getData(0);
+
+   // if (magic==MAGIC_NUMBER) {
+      
+        temp1 = rx.getData(1) << 8 | rx.getData(2);
+        Serial.print("temp = ");
+       Serial.println(temp1/100);
+
+       //LCD
+       lcd.clear();
+     lcd.print("temp = ");
+       lcd.print(temp1);
+
+        pres = rx.getData(3) << 24 | rx.getData(4) << 16 | rx.getData(5) << 8 | rx.getData(6);
+        Serial.print("pres = ");
+        Serial.println(pres);
+
+        //LCD
+       lcd.print("pres = ");
+       lcd.print(pres);
+
+       alt = rx.getData(7) << 8 | rx.getData(8);
+       Serial.print("Alt= ");
+       Serial.println(alt);
+
+       //LCD
+      
+       lcd.print("Alt = ");
+       lcd.print(alt);
+
+       x = rx.getData(9) << 8 | rx.getData(10);
+       Serial.print("x = ");
+       Serial.println(x);
+
+       y = rx.getData(11) << 8 | rx.getData(12);
+       Serial.print("y = ");
+       Serial.println(y);
+
+       z = rx.getData(13) << 8 | rx.getData(14);
+       Serial.print("z = ");
+       Serial.println(z);
+
+        //LCD
+       lcd.print("x = ");
+       lcd.print(x);
+       lcd.print("y = ");
+       lcd.print(y);
+       lcd.print("y = ");
+       lcd.print(y);
+       
+       humidity = rx.getData(15) << 8 | rx.getData(16);
+       Serial.print("Humidity= ");
+       Serial.println(humidity);
+
+       //LCD
+       lcd.print("Humidity = ");
+       lcd.print(humidity);
+       lcd.clear();
+       delay(100);
+    } else {
+      int i=0;
+      uint8_t wei[500]={0};
+      char tianyi[500]={0};
+      String cancerous;
+
+//transferring data into array
+      for (i=0;i<500;i++) {
+        wei[i] = rx.getData(i+1);
+      }
+
+//typecasting int to char, hope this will work oops
+     for (i=0;i<500;i++) {
+        tianyi[i] = char(wei[i]);
+      }
+
+//convert char array to string
+cancerous=String(tianyi); 
+
+//printing out data stored
+Serial.println("File Data: ");
+Serial.println(cancerous);
+
+    }
+      }
+    }
+}*/
+
+//-------------------------new receieve function---------------------
+void xbeerecievedata () {
+  xbee.readPacket();
+
+  if (xbee.getResponse().isAvailable())
+  {
+    if (xbee.getResponse().getApiId() == ZB_RX_RESPONSE) 
+    {
+      xbee.getResponse().getZBRxResponse(rx);
+
+      if (rx.getOption() == ZB_PACKET_ACKNOWLEDGED) 
+      {
+
+      } 
+      else 
+      {
+      }
+      
+      temperatureGet = rx.getData(0) << 8 | rx.getData(1);
+      temperature = temperatureGet/100.00;
+      unsigned char rxData[16];
+      /*
+      char print_rxdata[100];
+      print_rxdata[0] = '\0';
+      for(int i=0; i<16; i++)
+      {
+        rxData[i] = rx.getData(i);
+        sprintf(print_rxdata+strlen(print_rxdata), "%d,", rxData[i]);
+      }
+      Serial.println(print_rxdata);
+      */
+      Serial.println(temperature);
+
+      pressure = (long) rxData[2] <<24 | (long) rxData[3] <<16 | (long) rxData[4] <<8 | (long) rxData[5];
+      Serial.println(pressure);
+      
+      altitudeGet = rxData[6] << 8 | rxData[7];
+      altitude = altitudeGet/100.00;
+      Serial.println(altitude);
+      
+      magneticX = rxData[8] << 8 | rxData[9];
+      magneticY = rxData[10] << 8 | rxData[11];
+      magneticZ = rxData[12] << 8 | rxData[13];
+     
+      magnetic = sqrt(pow(magneticX, 2) + pow(magneticY, 2) + pow(magneticZ, 2));
+      Serial.println(magnetic);
+      
+      compassAz = (atan(magneticX * 1.0 / magneticY))*180*7/22;
+      compassAlt = (atan(magneticZ/(sqrt(sq(magneticX)+sq(magneticY)))))*180*7/22;
+      Serial.println(compassAz);
+      Serial.println(compassAlt);
+      
+      humidityGet = rxData[14] << 8 | rxData[15];
+      //humidity = (5000.0 / 31.0)*((humidityGet/1024.0) - 0.16);
+      Serial.println(humidityGet);
+
+    
+}
+  }
+}
+        
+//-------------------------end of new receive func--------------------------           
+void getTemp102 (){
+  byte firstByte, secondByte;
+  int value;
+  float convertedTemp;
+
+  Wire.beginTransmission(TMP102);
+  Wire.write((byte)0x00);
+  Wire.endTransmission();
+  Wire.requestFrom(TMP102, 2);
+
+  if(Wire.available() >=2){
+    firstByte = (Wire.read());
+    secondByte = (Wire.read());
+  }
+  value = ((firstByte) << 4);
+  value |= ((secondByte) >>4);
+  convertedTemp = value/16;
+ 
+/*Xbee send
+   Xbee = stateY;
+   payload[0] = Xbee >> 24 & 0xff;
+   payload[1] = Xbee >> 16 & 0xff;
+   payload[2] = Xbee >> 8 & 0xff;
+   payload[3] = Xbee & 0xff;
+   Xbee = stateX;
+   payload[4] = Xbee >> 24 & 0xff;
+   payload[5] = Xbee >> 16 & 0xff;
+   payload[6] = Xbee >> 8 & 0xff;
+   payload[7] = Xbee & 0xff;
+
+   xbee.send(zbTx);*/
+}
