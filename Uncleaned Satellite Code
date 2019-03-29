@@ -1,4 +1,3 @@
-#include <LCDi2cR.h>
 #include <Wire.h>
 #include <math.h>
 #include <XBee.h>
@@ -9,39 +8,39 @@
 #define HMC5883L 0x1E
 #define FILE "cancer.txt"
 
-//////////SD card
+//////////SD card variables
 File file;
 const int chipSelect = 53;
 int saveSetting = 0;
+int SDMode =0;
 
-///////////Servo
+///////////Servo variables
 Servo servoX;
 Servo servoY;
 int posX = 90;
 int posY = 90;
 
-
-//////////Xbee 
-//////////Xbee send
+//////////Xbee send details
 XBee xbee = XBee();
 uint8_t payload[50] = {0};
 int Xbee = 0;
-////////// SH + SL Address of receiving XBee
+//SH + SL Address of receiving XBee
 XBeeAddress64 addr64 = XBeeAddress64(0x0013A200, 0x4098DA0D);  
 ZBTxRequest zbTx = ZBTxRequest(addr64, payload, sizeof(payload));
 ZBTxStatusResponse txStatus = ZBTxStatusResponse();
-//Xbee receive
+
+//////////Xbee receive details
 XBeeResponse response   = XBeeResponse();
 ZBRxResponse        rx  = ZBRxResponse();
 ModemStatusResponse msr = ModemStatusResponse();
-//////////variable for xbee reveive
+
 int error;
 int keypad=0;
 int dataReceive;
 int refresh;
 int out;
 int keyState;
-//float convertedTemp=0; 
+
 //////////integers to send
 int temperatureSend;
 int heightSend;
@@ -65,14 +64,6 @@ int humidity;
 
 //////////HMC5883L
 int x, y, z;
-//int altitude, alzimuth;          
-//int milliGauss;
-//unsigned int xp, yp, zp;
-
-//////////Xbee receive 
-
-
-int SDMode =0;
 
 void setup() {
   
@@ -127,67 +118,76 @@ void setup() {
     Serial.println(" not found!");
   }
 }
-
+///////////////////////////////Main loop////////////////////////////////
 void loop() {
-  Serial.print("start");
+//**Xbee receives joystick data from ground station and send command to servo**
 
-  xbeeReceive();
-if ((stateX == 2)&&(posX <= 180)){
+//Xbee receives data from GS
+  Serial.println("Xbee receives data"");
+  
+  xbeeReceive();//data unpacking
+  
+  if ((stateX == 2)&&(posX <= 180))
+  {
   posX += 10;
-}
-else{
-  if((stateX == 0)&&(posX >= 10)){
-    posX -= 10 ;
   }
-}
-if ((stateY == 2)&&(posY <= 175)){
-  posY += 10;
-}
-else{
-  if((stateY == 0)&&(posY >= 20)){
-    posY -= 10;
+  else
+  { 
+    if((stateX == 0)&&(posX >= 10))
+    {
+      posX -= 10 ;
+    } 
   }
-}
+  
+  if ((stateY == 2)&&(posY <= 175))
+  {
+    posY += 10;
+  }
+  else
+  {
+    if((stateY == 0)&&(posY >= 20))
+    {
+      posY -= 10;
+    }
+  }
+
+  //Servos commands
   servoX.write(posX);
   servoY.write(posY);
   
-  
+//**Sensors read data, store in payload array and saves in SD card. Currently switch connected on satellite determines Normal mode(Sends raw data) or Replay mode(Sends data from SD card). Nevertheless, sensors still have to continuously read data.**
+
+  //Functions for sensors
   readTemperaturePressureHeight();
   readHumidity();
   readMagnetism();
 
   heightSend = height*100;
   temperatureSend = temperature*100;
-  
+
+  //Storing into payload array
   payloadxbee();
+
+  //Storing payload array into SD card
   SDwrite();
-  Serial.println("*******************");
-  
-  //replay();
-  
-if(SDMode==0) {
-  xbee.send(zbTx);
-  } else {
-  replay();
+  Serial.println("Data saved into SD card");
+
+  //Normal mode is 0: Send payload array via xbee straight away. If not, enter Replay Mode: send data(aka stored payload array) stored in SD card.
+  if(SDMode==0) 
+  {
+    Serial.println("Normal Mode Selected");
+    xbee.send(zbTx);
+  } 
+  else 
+  {
+    Serial.println("Replay Mode Selected");
+    replay();
   }
-    
-
-Serial.print("end");
-
- /*Serial.println(altitude);
- Serial.println(alzimuth);
- Serial.println(milliGauss);
- Serial.println();
- Serial.println(temperature);
- Serial.println(pressure);
- Serial.println(height);
- Serial.println();
- Serial.println(humidity);
- Serial.println();*/
-  
-   
+ 
 }
+///////////////////////End of Main loop////////////////////////
 
+//Function to receive joystick data from ground station
 void xbeeReceive() {
 
   xbee.readPacket();
@@ -204,46 +204,44 @@ void xbeeReceive() {
       } 
       else 
       {
+        
       }
-      Serial.println("statestate");
       
       stateY =  rx.getData(0) <<8 |  rx.getData(1);
+      Serial.println("StateY : ");
       Serial.println(stateY);
       stateX =  rx.getData(2) <<8 | rx.getData(3);
+      Serial.println("StateX : ");
       Serial.println(stateX);
-}
+    }
   }
 }
 
+//Function for Replay mode
   void replay() {
-    //int i=0;
-    //int c=0;
-    //temperatureSend=0;
-    //pressure=0;
-    //heightSend=0;
-    //x=0;
-    //y=0;
-    //z=0;
-    //humidity=0;
+
       //Opening file for reading
   File dataFile = SD.open(FILE, FILE_READ);
     
   // Check if file is available 
   if (dataFile) 
   {
-    // Byte containing last read data
+  // Byte containing last read data
   byte readByte = 0;
-  // Variable containing all data of the file
- 
-  //add this in ltr*****************Serial.println("File Data: ");
   
-  // File available, read file until no data available
+  //Variables
   int e=0;
   int str_temp_count = 0;
-  char str_temp[5];
+  char str_temp[5]; 
+  
+  Serial.println("File Data: ");
+  
+  // File available, read file until no data available
   while(dataFile.available()) 
   {
     readByte = dataFile.read();
+    
+    //Each sensor reading is separated by a ,
     if(readByte!=',')
     {
       str_temp[str_temp_count]=readByte;
@@ -256,82 +254,38 @@ void xbeeReceive() {
       payload[e] = atoi(str_temp);
       e++;
     }
-    //Serial.println(readByte);
-    //temperatureSend=readByte;
-    //Serial.println("hihi");
-    //Serial.println(char(temperatureSend));
-
-
-    /*if ( c==0 || c==1) {
-      temperatureSend=temperatureSend*10+char(readByte);
-    }
-
-    if ( c==2 || c==3 || c==4 || c==5 ) {
-      pressure=pressure*10+char(readByte);
-    }
-
-     if ( c==6 || c==7 ) {
-      heightSend=heightSend*10+char(readByte);
-    }
-
-    if ( c==8 || c==9 ) {
-      x=x*10+char(readByte);
-    }
-
-     if ( (readByte!=',')&&(c>=10&&c<12) ) {
-      y=y*10+char(readByte);
-    }
-
-     if ( c==10 || c==11 ) {
-      z=z*10+char(readByte);
-    }
-
-     if ( c==12 || c==13 ) {
-      humidity=humidity*10+char(readByte);
-    }
-
-    if (readByte==',') {
-      c++;
-    }*/
     
-    if(readByte=='!') {
+  //End of a set of data aka from all sensors is indicated by !, after each set of data, break loop
+    if(readByte=='!') { 
       
       break;
     }
-    /*Serial.println("Data");
-    Serial.println(temperatureSend);
-    Serial.println(pressure);
-    Serial.println(heightSend);
-    Serial.println(x);
-    Serial.println(y);
-    Serial.println(z);
-    Serial.println(humidity);*/
     
-    /*int i=0;
-    for (i=0; readByte != '!'; i++) {
-    if (readByte != ',') {
-      payload[i] = char(readByte);
-    }
-    }
-    Serial.println("Payload");
-    for (i=0; i<16; i++) {
-      Serial.println(payload[i]);
-    } */
   }
+
+  //Conducting a check of what is gonna send out via xbee
   int i=0;
-    //***************Serial.println("Payload");
-    for (i=0; i<16; i++) {
-      //**********************Serial.print(payload[i]); Serial.print(",");
-    }
-    //********************Serial.println("");
-  xbee.send(zbTx);
-  dataFile.close();
-}
+
+  Serial.println("Displaying data stored :");
+  
+  for (i=0; i<16; i++) 
+  {
+    Serial.print(payload[i]); 
+    Serial.print(",");
   }
   
+  Serial.println("");
 
+  //Everything's alright, xbee sends stored data
+  xbee.send(zbTx); 
+  dataFile.close();
+  }
+  
+}
+
+  //Function storing sensor data intto payload array
   void payloadxbee() {
-     //while ((dataReceive == 0) & (refresh < 10)){
+    
     payload[0] = temperatureSend >> 8 & 0xff;
     payload[1] = temperatureSend & 0xff;
     payload[2] = pressure >> 24 & 0xff;
@@ -351,16 +305,10 @@ void xbeeReceive() {
     payload[14] = humidity >> 8 & 0xff;
     payload[15] = humidity & 0xff;  
 
-    //xbee.send(zbTx);
-    //refresh++;
-    // }
-     //dataReceive = 0;
-     //refresh = 0;
-
   }
 
-//////////xBee Functions
-void checkData(){
+//////////xBee Defunc Functions, currently not in use
+/*void checkData(){
   if(xbee.readPacket(1000)){
     if(xbee.getResponse().getApiId() == ZB_TX_STATUS_RESPONSE){
       xbee.getResponse().getZBTxStatusResponse(txStatus);
@@ -372,39 +320,48 @@ void checkData(){
   }
   else{
     }
-}
+}*/
 
-
-//////////SD card
+////////// Function to write payload array into SD card
 void SDwrite(){
+  
   int i=0;
+  
   // Open file for writing
   File dataFile = SD.open(FILE, FILE_WRITE);
-  //*******************8Serial.println("SD card open");
+  
+  Serial.println("SD card open");
+  
   // Check if file is available 
-  if (dataFile) {
-  //*******************8Serial.println("SD card writing");
-    // File Available
-    // Write Temperature Value (Pressure Sensor)
-    for(i=0;i<16;i++) {
-    dataFile.print(payload[i]);
-    dataFile.print(",");
+  if (dataFile) 
+  {
+    Serial.println("SD card writing");
+  
+    // Writes data
+    for(i=0;i<16;i++) 
+    {
+      dataFile.print(payload[i]);
+      dataFile.print(",");//after each sensor reading
     }
-    dataFile.print("!");
-    //***********************Serial.println("SD card done writing");
+    
+    dataFile.print("!"); //after each data set
+    
+    Serial.println("SD card done writing");
+    
     // Writing done, close file
     dataFile.close();
+    
+    }
 }
-}
-
 
 //////////HMC5883L Function
 void readMagnetism(){
-  Wire.beginTransmission(HMC5883L);
+ Wire.beginTransmission(HMC5883L);
  Wire.write(0x03);
  Wire.endTransmission();
  Wire.requestFrom(HMC5883L, 6);
- if(6 <= Wire.available()){
+ if(6 <= Wire.available())
+ {
   x = Wire.read() <<8;
   x |= Wire.read();
   z = Wire.read() <<8;
@@ -412,16 +369,9 @@ void readMagnetism(){
   y = Wire.read() <<8;
   y |= Wire.read();
 
-  delay(100);
  }
- /*altitude = atan2(-y, x)*(180/M_PI);
- xp = sq(x);
- yp = sq(y);
- zp = sq(z);
- milliGauss = 2*(sqrt(xp +yp +zp));
- alzimuth = atan2(sqrt(zp +yp), z)*(180/M_PI) - 90; */
-}
 
+}
 
 //////////HIH4030 Function
 void readHumidity(){
@@ -429,12 +379,13 @@ void readHumidity(){
   humidity = ((((HIHValue /204.8)-0.958)/3) * 100); 
 }
 
-//////////BMP085 Functions
+///////////////////////////BMP085 Functions///////////////////////
 void readTemperaturePressureHeight(){
   temperature = bmp085GetTemperature(bmp085ReadUT());
   pressure = bmp085GetPressure(bmp085ReadUP());
   height = 44330.0 * (1.0 - pow((pressure/101100.0), (1 / 5.255))); //1350
 }
+
 char bmp085Read(unsigned char address){
   unsigned char data;
   Wire.beginTransmission(BMP085);
@@ -444,6 +395,7 @@ char bmp085Read(unsigned char address){
   while(!Wire.available());
   return Wire.read();
 }
+
 int bmp085ReadInt(unsigned char address) {
   unsigned char msb, lsb;
   Wire.beginTransmission(BMP085);
@@ -455,6 +407,7 @@ int bmp085ReadInt(unsigned char address) {
   lsb = Wire.read();
   return (int) msb << 8 | lsb;
 }
+
 void bmp085Calibration(){
   ac1 = bmp085ReadInt(0xAA);
   ac2 = bmp085ReadInt(0xAC);
@@ -468,6 +421,7 @@ void bmp085Calibration(){
   mc = bmp085ReadInt(0xBC);
   md = bmp085ReadInt(0xBE);
 }
+
 unsigned long bmp085ReadUP() {
   unsigned char msb, lsb, xlsb;
   unsigned long up = 0;
@@ -487,6 +441,7 @@ unsigned long bmp085ReadUP() {
   up = (((unsigned long) msb << 16) | ((unsigned long) lsb << 8) | (unsigned long) xlsb) >> (8-OSS);
   return up;
 }
+
 unsigned int bmp085ReadUT() {
   unsigned int ut;
   Wire.beginTransmission(BMP085);
@@ -497,6 +452,7 @@ unsigned int bmp085ReadUT() {
   ut = bmp085ReadInt(0xF6);
   return ut;
 }
+
 double bmp085GetTemperature(unsigned int ut){
   long x1, x2;
   x1 = (((long)ut - (long)ac6)*(long)ac5) >> 15;
@@ -504,6 +460,7 @@ double bmp085GetTemperature(unsigned int ut){
   b5 = x1 + x2;
   return((b5 + 8) >> 4)*0.1;
 }
+
 long bmp085GetPressure(unsigned long up){
   long x1, x2, x3, b3, b6, p;
   unsigned long b4, b7;
@@ -529,3 +486,4 @@ long bmp085GetPressure(unsigned long up){
   p += (x1 + x2 + 3791) >> 4;
   return p;
 }
+//////////////////////////End of BMP085 Functions///////////////////
