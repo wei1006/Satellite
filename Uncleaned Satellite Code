@@ -123,7 +123,7 @@ void loop() {
 //**Xbee receives joystick data from ground station and send command to servo**
 
 //Xbee receives data from GS
-  Serial.println("Xbee receives data"");
+  Serial.println("Xbee receives data");
   
   xbeeReceive();//data unpacking
   
